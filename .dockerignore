@@ -1,0 +1,11 @@
+node_modules
+dist
+dashboard
+.git
+.env
+.env.*
+screenshots
+.tmp
+*.log
+README.md
+.github

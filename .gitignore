@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+dashboard/node_modules/
+
+# Build output
+dist/
+dashboard/.next/
+dashboard/out/
+
+# Environment & secrets — never commit
+.env
+.env.local
+.env.*.local
+dashboard/.env
+dashboard/.env.local
+
+# Runtime artifacts
+screenshots/
+.tmp/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Playwright
+playwright-report/
+test-results/

@@ -5,6 +5,8 @@ An open-source AI agent that searches for jobs and scholarships, scores them aga
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/YOUR_USERNAME/applai/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/applai/actions/workflows/ci.yml)
 
+> **Before publishing:** replace `YOUR_USERNAME` in this file and `package.json` with your GitHub username.
+
 ## Features
 
 - **Resume-driven search** — upload a CV; Tavily queries are built from your skills, role, and experience
@@ -17,22 +19,27 @@ An open-source AI agent that searches for jobs and scholarships, scores them aga
 - **Health dashboard** — check Ollama, Supabase, Tavily, and Playwright at `/status`
 - **Docker Compose** — one-command API + dashboard setup
 - **Notifications** — optional email digest and Twilio WhatsApp alerts
-- **Scheduled pipeline** — daily search at 6 AM, digest at 8 AM
+- **Scheduled pipeline** — daily search at 6:00 AM, digest at 8:00 AM
+
+## Screenshots
+
+<!-- Add PNGs to docs/screenshots/ then uncomment:
+![Dashboard](docs/screenshots/dashboard-home.png)
+-->
 
 ## Architecture
 
-```
-Resume upload (/profile)
-    ↓
-Search Agent (Tavily → ATS job boards)
-    ↓
-Filter Agent (skill overlap + Ollama score)
-    ↓
-Writer Agent (cover letter / essay drafts)
-    ↓
-Dashboard review → Approve & Preview (dry-run)
-    ↓
-Confirm & Submit (explicit)
+```mermaid
+flowchart TD
+  A[Upload resume /profile] --> B[Search Agent - Tavily]
+  B --> C[Filter Agent - score vs CV]
+  C --> D[Writer Agent - cover letter]
+  D --> E[Dashboard review]
+  E --> F[Approve and Preview - dry run]
+  F --> G{Confirm submit?}
+  G -->|Yes| H[Playwright fill + upload CV + submit]
+  G -->|No| E
+  H --> I[History log + notification]
 ```
 
 ## Tech stack
@@ -53,9 +60,9 @@ Confirm & Submit (explicit)
 ### Prerequisites
 
 - Node.js 20+
-- [Ollama](https://ollama.com) running locally (`ollama serve`)
-- Tavily API key
-- Supabase project
+- [Ollama](https://ollama.com) (`ollama serve`)
+- [Tavily](https://tavily.com) API key
+- [Supabase](https://supabase.com) project
 
 ### Install
 
@@ -70,11 +77,13 @@ cp .env.example .env
 cp dashboard/.env.local.example dashboard/.env.local
 ```
 
-Fill in `.env` and `dashboard/.env.local`. See [Environment variables](#environment-variables).
+Fill in `.env` and `dashboard/.env.local`. See [Environment variables](#environment-variables) and [API keys setup](#api-keys-setup).
 
 ### Database
 
-Run the SQL files in [supabase/](supabase/README.md), then create Storage buckets `resumes` and `screenshots`.
+See [supabase/README.md](supabase/README.md).
+
+**Fresh install:** run `schema.sql` then `profile.sql`, create Storage buckets `resumes` and `screenshots`.
 
 ### Run
 
@@ -86,10 +95,11 @@ npm run dev
 npm run dev:dashboard
 ```
 
-1. Upload your resume at [http://localhost:4001/profile](http://localhost:4001/profile)
-2. Click **Run Search** on the home page
-3. Review opportunities, click **Approve & Preview** (fills form, no submit)
-4. Check screenshot and form fill report, then **Confirm & Submit**
+1. Open [http://localhost:4001/status](http://localhost:4001/status) — all services should be green
+2. Upload your resume at [http://localhost:4001/profile](http://localhost:4001/profile)
+3. Click **Run Search** on the home page
+4. **Approve & Preview** an opportunity (fills form, does not submit)
+5. Review screenshot + form fill report → **Confirm & Submit**
 
 ### Docker
 
@@ -98,88 +108,150 @@ cp .env.example .env   # fill in keys
 docker compose up --build
 ```
 
-API: [http://localhost:4000](http://localhost:4000) · Dashboard: [http://localhost:4001](http://localhost:4001)
+- API: [http://localhost:4000](http://localhost:4000)
+- Dashboard: [http://localhost:4001](http://localhost:4001)
 
-Ollama must run on the host (`ollama serve`). The API container connects via `host.docker.internal:11434`.
+Ollama must run on the host (`ollama serve`). The API container uses `host.docker.internal:11434`.
+
+## API keys setup
+
+### Ollama
+
+```bash
+ollama serve
+ollama pull llama3.2          # or any model you have
+ollama list                   # optional: set OLLAMA_MODEL in .env
+```
+
+Cloud models (e.g. `minimax-m2.5:cloud`) work if listed in `ollama list`.
+
+### Tavily
+
+1. Sign up at [tavily.com](https://tavily.com)
+2. Copy API key (starts with `tvly-`)
+3. Set `TAVILY_API_KEY` in `.env` and restart the API
+
+### Supabase
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Run SQL from [supabase/](supabase/README.md)
+3. **Settings → API** → copy Project URL, `anon` key, and `service_role` key
+4. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` in `.env`
+
+Use the **service role** key only on the backend API — never in the dashboard frontend.
+
+### Gmail notifications (optional)
+
+1. Enable 2FA on your Google account
+2. Create an [App Password](https://myaccount.google.com/apppasswords)
+3. Set `EMAIL_USER`, `EMAIL_PASS`, `NOTIFICATION_EMAIL` in `.env`
+
+### Twilio WhatsApp (optional)
+
+1. [Twilio Console](https://www.twilio.com/console) → Account SID + Auth Token
+2. Enable [WhatsApp Sandbox](https://www.twilio.com/docs/whatsapp/sandbox) or a registered sender
+3. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `WHATSAPP_TO`
 
 ## Environment variables
-
-Copy `.env.example` to `.env`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `TAVILY_API_KEY` | Yes | Tavily search API key |
 | `SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes* | Backend key (bypasses RLS) |
-| `SUPABASE_ANON_KEY` | Yes* | Public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Backend key (bypasses RLS) |
+| `SUPABASE_ANON_KEY` | Yes | Public anon key |
 | `OLLAMA_BASE_URL` | No | Default `http://localhost:11434` |
 | `OLLAMA_MODEL` | No | Auto-detected from `ollama list` if unset |
-| `EMAIL_USER` / `EMAIL_PASS` / `NOTIFICATION_EMAIL` | No | Gmail digest notifications |
+| `EMAIL_USER` / `EMAIL_PASS` / `NOTIFICATION_EMAIL` | No | Gmail digest |
 | `TWILIO_*` / `WHATSAPP_TO` | No | WhatsApp digest |
-| `PLAYWRIGHT_HEADLESS` | No | `true` (default) or `false` to watch the browser |
+| `PLAYWRIGHT_HEADLESS` | No | Unset or `true` = headless; `false` = visible browser |
 | `PORT` | No | API port (default `4000`) |
 | `DASHBOARD_URL` | No | CORS origin (default `http://localhost:4001`) |
 
-\* Use the service role key for the API server. Never commit it or expose it in the Next.js app.
-
-Dashboard: set `NEXT_PUBLIC_API_URL=http://localhost:4000` in `dashboard/.env.local`.
+Dashboard: `NEXT_PUBLIC_API_URL=http://localhost:4000` in `dashboard/.env.local`.
 
 ## API endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/opportunities` | List (filters: `status`, `type`, `minScore`) |
+| `GET` | `/health` | Service health (`?deep=true` runs live Tavily + Playwright checks) |
+| `GET` | `/api/opportunities` | List (`status`, `type`, `minScore` filters) |
 | `GET` | `/api/opportunities/:id` | Detail + application draft |
 | `POST` | `/api/opportunities/:id/approve` | Approve + preview form (dry-run) |
 | `POST` | `/api/opportunities/:id/approve` `{ "apply": true }` | Approve + submit immediately |
-| `GET` | `/api/history` | Submission audit log |
-| `GET` | `/health` | Service health (`?deep=true` for full checks) |
 | `POST` | `/api/opportunities/:id/reject` | Reject |
 | `POST` | `/api/opportunities/clear` | Clear crawled results |
 | `POST` | `/api/opportunities/rescore` | Re-run match scoring |
-| `POST` | `/api/submit/:id` | Prepare submission (preview) |
-| `POST` | `/api/profile/resume` | Upload resume |
+| `POST` | `/api/submit/:id` | Preview form fill |
+| `POST` | `/api/submit/:id` `{ "confirmSubmit": true }` | Confirm and submit |
+| `GET` | `/api/history` | Submission audit log |
 | `GET` | `/api/profile` | Active profile |
+| `POST` | `/api/profile/resume` | Upload resume (multipart) |
 | `POST` | `/api/run-search` | Run search pipeline |
+| `GET` | `/api/pipeline/status` | Pipeline state |
 | `GET` | `/api/pipeline/stream` | Live pipeline logs (SSE) |
-| `GET` | `/health` | Health check |
+
+## Scheduler
+
+| Time | Job |
+|------|-----|
+| 6:00 AM daily | Search → filter → write pipeline |
+| 8:00 AM daily | Email + WhatsApp digest of shortlisted opportunities |
 
 ## Project structure
 
 ```
 applai/
-├── prompts/           # LLM prompt templates
+├── prompts/              # LLM prompt templates
 ├── src/
-│   ├── agents/        # search, filter, writer, submission
-│   ├── api/           # Express routes
-│   ├── config/        # env, sources, defaults
-│   ├── services/      # supabase, ollama, profile, notifier
-│   └── utils/         # form fill, match scoring, URL filters
-├── dashboard/         # Next.js UI
-└── supabase/          # SQL schema + setup notes
+│   ├── agents/           # search, filter, writer, submission
+│   ├── api/                # Express routes
+│   ├── config/             # env, sources, profile defaults
+│   ├── services/           # supabase, ollama, health, submission log
+│   └── utils/              # form fill, match scoring, URL filters
+├── dashboard/              # Next.js UI (/, /profile, /history, /status)
+├── supabase/               # SQL schema + setup guide
+├── docker-compose.yml
+└── .github/workflows/      # CI
 ```
 
 ## Customizing your profile
 
-Upload a resume at **/profile** in the dashboard. Skills, experience, and education are extracted automatically and drive search, scoring, and cover letters.
+Upload a resume at **/profile**. Skills, experience, and education are extracted automatically and drive search, scoring, and cover letters.
 
 Static fallbacks in `src/config/profile.ts` apply only before a resume is uploaded.
 
 ## Auto-apply limitations
 
 - Works best on **direct application URLs** (Greenhouse, Lever, Ashby, etc.)
-- Some sites require login, CAPTCHA, or custom question flows that cannot be automated
+- Login walls, CAPTCHA, and custom ATS questions may block automation
 - Always review the submission screenshot before confirming
 - You are responsible for applications submitted through this tool
 
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `Could not find table 'submission_logs'` | Run `supabase/submission_logs.sql` in Supabase SQL Editor ([guide](supabase/README.md)) |
+| `new row violates row-level security` (42501) | Add `SUPABASE_SERVICE_ROLE_KEY` to `.env` and restart API; or run `supabase/rls.sql` |
+| `TAVILY_API_KEY is not set` | Add key to `.env`, restart `npm run dev` |
+| `browserType.launch: Executable doesn't exist` | Run `npx playwright install chromium` |
+| Dashboard empty but API has data | Clear score filter (use "Any score"); click **Rescore all** |
+| Search finds nothing | Upload resume at `/profile` first — search uses only CV data |
+| Match scores all 0 | Click **Rescore all**; scores use skill overlap + Ollama |
+| Form fill: all fields missed | URL may be a listing page, not an apply form — use Greenhouse/Lever links |
+| Resume upload works but apply misses CV | Create `resumes` bucket in Supabase Storage; re-upload CV |
+| History page empty | Normal until first **Approve & Preview**; ensure `submission_logs` table exists |
+| Ollama JSON parse errors | Model may struggle with JSON — app falls back to rule-based scoring/search |
+
+Check **Status** page at [http://localhost:4001/status](http://localhost:4001/status) or `GET /health?deep=true`.
+
 ## Publishing checklist
 
-Before pushing to GitHub:
-
-- [ ] `.env` and `dashboard/.env` are **not** committed (covered by `.gitignore`)
-- [ ] No API keys or passwords in source code
-- [ ] Rotate any keys that were ever committed or shared
-- [ ] Update `package.json` `repository` URL to your fork
+- [ ] Replace `YOUR_USERNAME` in README and `package.json`
+- [ ] `.env` and `dashboard/.env` not committed (see `.gitignore`)
+- [ ] Rotate keys if they were ever shared
+- [ ] Add screenshots to `docs/screenshots/` (optional but recommended)
 
 ```bash
 git init
@@ -192,7 +264,7 @@ git push -u origin main
 
 ## Contributing
 
-Contributions welcome. Open an issue or PR on GitHub.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests welcome via GitHub Issues.
 
 ## License
 
