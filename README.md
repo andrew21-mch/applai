@@ -23,6 +23,8 @@ An open-source AI agent that searches for jobs and scholarships, scores them aga
 
 ## Screenshots
 
+![Demo walkthrough](docs/screenshots/demo.gif)
+
 <!-- Add PNGs to docs/screenshots/ then uncomment:
 ![Dashboard](docs/screenshots/dashboard-home.png)
 -->
