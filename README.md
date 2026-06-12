@@ -291,6 +291,8 @@ git push -u origin main
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests welcome via GitHub Issues.
 
+**Planned work:** [docs/BACKLOG.md](docs/BACKLOG.md) — prioritized issue list (P0–P3) to tackle gradually.
+
 ## License
 
 [MIT](LICENSE) — Copyright (c) 2026 ApplAI contributors
