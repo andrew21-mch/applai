@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchHealth, type HealthReport } from '@/lib/api';
+import { fetchHealth, sendDigest, type HealthReport } from '@/lib/api';
 
 function StatusBadge({ ok }: { ok: boolean }) {
   return (
@@ -15,6 +15,8 @@ export default function StatusPage() {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [deep, setDeep] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState<'test' | 'digest' | null>(null);
+  const [notifyResult, setNotifyResult] = useState<string | null>(null);
 
   async function load(runDeep = false) {
     setLoading(true);
@@ -31,6 +33,24 @@ export default function StatusPage() {
   useEffect(() => {
     load(deep);
   }, [deep]);
+
+  async function runNotification(kind: 'test' | 'digest') {
+    setNotifyBusy(kind);
+    setNotifyResult(null);
+    try {
+      const result = await sendDigest(kind === 'test' ? { test: true } : {});
+      setNotifyResult(result.message);
+      await load(deep);
+    } catch (err) {
+      setNotifyResult(err instanceof Error ? err.message : 'Notification failed');
+    } finally {
+      setNotifyBusy(null);
+    }
+  }
+
+  const notifications = report?.services.notifications;
+  const notifyConfigured =
+    notifications?.details?.email === true || notifications?.details?.whatsapp === true;
 
   return (
     <div className="container">
@@ -72,6 +92,29 @@ export default function StatusPage() {
                 <StatusBadge ok={check.ok} />
               </h2>
               <p>{check.message}</p>
+              {name === 'notifications' && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!notifyConfigured || notifyBusy !== null}
+                    onClick={() => runNotification('test')}
+                  >
+                    {notifyBusy === 'test' ? 'Sending…' : 'Send test'}
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    disabled={!notifyConfigured || notifyBusy !== null}
+                    onClick={() => runNotification('digest')}
+                  >
+                    {notifyBusy === 'digest' ? 'Sending…' : 'Send digest now'}
+                  </button>
+                </div>
+              )}
+              {notifyResult && name === 'notifications' && (
+                <p style={{ marginTop: '0.75rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+                  {notifyResult}
+                </p>
+              )}
               {check.details && (
                 <pre style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem', overflow: 'auto' }}>
                   {JSON.stringify(check.details, null, 2)}
@@ -79,6 +122,22 @@ export default function StatusPage() {
               )}
             </section>
           ))}
+
+          {report.scheduler && (
+            <section className="section">
+              <h2>Scheduler</h2>
+              <ul style={{ listStyle: 'none', lineHeight: 2, color: 'var(--muted)' }}>
+                <li>Search: <code>{report.scheduler.search}</code></li>
+                <li>Digest: <code>{report.scheduler.digest}</code></li>
+                <li>Timezone: {report.scheduler.timezone}</li>
+                <li>Digest min score: {report.scheduler.digestMinScore}</li>
+              </ul>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
+                Cron runs only while the API process is running. Override with{' '}
+                <code>CRON_SEARCH</code>, <code>CRON_DIGEST</code>, <code>CRON_TZ</code> in <code>.env</code>.
+              </p>
+            </section>
+          )}
 
           <section className="section">
             <h2>Environment</h2>

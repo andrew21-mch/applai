@@ -15,7 +15,9 @@ import {
   listOpportunities,
   updateOpportunityStatus,
 } from '../services/supabase';
+import { sendDailyDigest, sendTestNotification } from '../agents/notificationAgent';
 import { listSubmissionLogs } from '../services/submissionLog';
+import { getNotificationChannels } from '../services/notifier';
 import { logger } from '../utils/logger';
 import type { OpportunityStatus } from '../types';
 
@@ -168,6 +170,50 @@ router.get('/pipeline/stream', (req: Request, res: Response) => {
   req.on('close', () => {
     unsubscribe();
   });
+});
+
+router.post('/send-digest', async (req: Request, res: Response) => {
+  try {
+    const channels = getNotificationChannels();
+    if (!channels.email && !channels.whatsapp) {
+      res.status(400).json({
+        error:
+          'No notification channel configured. Set EMAIL_USER, EMAIL_PASS, NOTIFICATION_EMAIL or Twilio WhatsApp credentials.',
+      });
+      return;
+    }
+
+    if (req.body?.test === true) {
+      await sendTestNotification();
+      res.json({ message: 'Test notification sent.', test: true });
+      return;
+    }
+
+    const minScore =
+      req.body?.minScore !== undefined
+        ? parseInt(String(req.body.minScore), 10)
+        : undefined;
+
+    const count = await sendDailyDigest(minScore);
+    if (count === 0) {
+      const threshold = minScore ?? parseInt(process.env.DIGEST_MIN_SCORE ?? '60', 10);
+      res.json({
+        message: `No shortlisted opportunities (score ≥ ${threshold}, status new/reviewed).`,
+        count: 0,
+      });
+      return;
+    }
+
+    res.json({
+      message: `Digest sent for ${count} opportunit${count === 1 ? 'y' : 'ies'}.`,
+      count,
+    });
+  } catch (err) {
+    logger.error('POST /send-digest failed', err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Failed to send digest',
+    });
+  }
 });
 
 router.post('/run-search', async (_req: Request, res: Response) => {

@@ -1,8 +1,10 @@
 import { existsSync } from 'fs';
 import { chromium } from 'playwright';
 import { envStatus } from '../config/env';
+import { getNotificationChannels, verifyEmailTransport } from './notifier';
 import { getOllamaStatus } from './ollama';
 import { getSupabase } from './supabase';
+import { isWhatsAppConfigured } from './whatsapp';
 
 export interface ServiceCheck {
   ok: boolean;
@@ -19,6 +21,13 @@ export interface HealthReport {
     supabase: ServiceCheck;
     tavily: ServiceCheck;
     playwright: ServiceCheck;
+    notifications: ServiceCheck;
+  };
+  scheduler?: {
+    search: string;
+    digest: string;
+    timezone: string;
+    digestMinScore: string;
   };
 }
 
@@ -96,6 +105,55 @@ async function checkPlaywright(deep = false): Promise<ServiceCheck> {
   }
 }
 
+async function checkNotifications(deep = false): Promise<ServiceCheck> {
+  const channels = getNotificationChannels();
+  const details: Record<string, unknown> = {
+    email: channels.email,
+    whatsapp: channels.whatsapp,
+    digestMinScore: process.env.DIGEST_MIN_SCORE ?? '60',
+  };
+
+  if (!channels.email && !channels.whatsapp) {
+    return {
+      ok: true,
+      message: 'Optional — not configured',
+      details,
+    };
+  }
+
+  const parts: string[] = [];
+  if (channels.email) parts.push('Email');
+  if (channels.whatsapp) parts.push('WhatsApp');
+
+  if (!deep) {
+    return {
+      ok: true,
+      message: `${parts.join(' + ')} configured`,
+      details,
+    };
+  }
+
+  if (channels.email) {
+    const emailCheck = await verifyEmailTransport();
+    details.emailVerified = emailCheck.ok;
+    if (!emailCheck.ok) {
+      return { ok: false, message: emailCheck.message, details };
+    }
+  }
+
+  if (channels.whatsapp && !isWhatsAppConfigured()) {
+    return { ok: false, message: 'WhatsApp credentials incomplete', details };
+  }
+
+  return {
+    ok: true,
+    message: deep && channels.email
+      ? 'Email verified; channels ready'
+      : `${parts.join(' + ')} configured`,
+    details,
+  };
+}
+
 export async function getHealthReport(options?: { deep?: boolean }): Promise<HealthReport> {
   const env = envStatus();
   const ollamaStatus = await getOllamaStatus();
@@ -112,13 +170,14 @@ export async function getHealthReport(options?: { deep?: boolean }): Promise<Hea
         details: { hint: 'Run: ollama serve' },
       };
 
-  const [supabase, tavily, playwright] = await Promise.all([
+  const [supabase, tavily, playwright, notifications] = await Promise.all([
     env.SUPABASE_URL ? checkSupabase() : Promise.resolve({ ok: false, message: 'SUPABASE_URL not set' }),
     checkTavily(options?.deep),
     checkPlaywright(options?.deep),
+    checkNotifications(options?.deep),
   ]);
 
-  const checks = [ollama, supabase, tavily, playwright];
+  const checks = [ollama, supabase, tavily, playwright, notifications];
   const okCount = checks.filter((c) => c.ok).length;
 
   let status: HealthReport['status'] = 'healthy';
@@ -129,7 +188,13 @@ export async function getHealthReport(options?: { deep?: boolean }): Promise<Hea
     status,
     timestamp: new Date().toISOString(),
     env,
-    services: { ollama, supabase, tavily, playwright },
+    services: { ollama, supabase, tavily, playwright, notifications },
+    scheduler: {
+      search: process.env.CRON_SEARCH ?? '0 6 * * *',
+      digest: process.env.CRON_DIGEST ?? '0 8 * * *',
+      timezone: process.env.CRON_TZ ?? 'server local',
+      digestMinScore: process.env.DIGEST_MIN_SCORE ?? '60',
+    },
   };
 }
 

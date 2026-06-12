@@ -120,6 +120,12 @@ export interface HealthReport {
   timestamp: string;
   env: Record<string, boolean>;
   services: Record<string, { ok: boolean; message: string; details?: Record<string, unknown> }>;
+  scheduler?: {
+    search: string;
+    digest: string;
+    timezone: string;
+    digestMinScore: string;
+  };
 }
 
 export async function fetchHealth(deep = false): Promise<HealthReport> {
@@ -246,4 +252,11 @@ export function subscribePipeline(
 
 export async function runSearch() {
   return request<{ message: string; data: PipelineStatus }>('/api/run-search', { method: 'POST' });
+}
+
+export async function sendDigest(options?: { test?: boolean; minScore?: number }) {
+  return request<{ message: string; count?: number; test?: boolean }>('/api/send-digest', {
+    method: 'POST',
+    body: JSON.stringify(options ?? {}),
+  });
 }

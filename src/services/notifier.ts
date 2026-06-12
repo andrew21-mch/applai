@@ -21,8 +21,38 @@ function getTransporter() {
   });
 }
 
-function isEmailConfigured(): boolean {
+export function isEmailConfigured(): boolean {
   return !!(process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.NOTIFICATION_EMAIL);
+}
+
+export function getNotificationChannels(): { email: boolean; whatsapp: boolean } {
+  return {
+    email: isEmailConfigured(),
+    whatsapp: isWhatsAppConfigured(),
+  };
+}
+
+export async function verifyEmailTransport(): Promise<{ ok: boolean; message: string }> {
+  if (!isEmailConfigured()) {
+    return { ok: false, message: 'Email not configured' };
+  }
+
+  try {
+    const transporter = getTransporter();
+    if (!transporter) {
+      return { ok: false, message: 'Email transporter unavailable' };
+    }
+    await transporter.verify();
+    return {
+      ok: true,
+      message: `Gmail reachable (${process.env.NOTIFICATION_EMAIL})`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Gmail verification failed',
+    };
+  }
 }
 
 function formatOpportunityEntry(

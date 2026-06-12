@@ -166,6 +166,9 @@ Use the **service role** key only on the backend API — never in the dashboard 
 | `OLLAMA_MODEL` | No | Auto-detected from `ollama list` if unset |
 | `EMAIL_USER` / `EMAIL_PASS` / `NOTIFICATION_EMAIL` | No | Gmail digest |
 | `TWILIO_*` / `WHATSAPP_TO` | No | WhatsApp digest |
+| `CRON_SEARCH` / `CRON_DIGEST` | No | Cron schedules (default 6:00 / 8:00) |
+| `CRON_TZ` | No | Timezone for cron (e.g. `Europe/London`) |
+| `DIGEST_MIN_SCORE` | No | Min match score for digest (default `60`) |
 | `PLAYWRIGHT_HEADLESS` | No | Unset or `true` = headless; `false` = visible browser |
 | `PORT` | No | API port (default `4000`) |
 | `DASHBOARD_URL` | No | CORS origin (default `http://localhost:4001`) |
@@ -190,15 +193,35 @@ Dashboard: `NEXT_PUBLIC_API_URL=http://localhost:4000` in `dashboard/.env.local`
 | `GET` | `/api/profile` | Active profile |
 | `POST` | `/api/profile/resume` | Upload resume (multipart) |
 | `POST` | `/api/run-search` | Run search pipeline |
+| `POST` | `/api/send-digest` | Send digest now (`{ "minScore": 40 }` optional) |
+| `POST` | `/api/send-digest` `{ "test": true }` | Send test notification |
 | `GET` | `/api/pipeline/status` | Pipeline state |
 | `GET` | `/api/pipeline/stream` | Live pipeline logs (SSE) |
 
 ## Scheduler
 
-| Time | Job |
-|------|-----|
-| 6:00 AM daily | Search → filter → write pipeline |
-| 8:00 AM daily | Email + WhatsApp digest of shortlisted opportunities |
+Starts automatically with `npm run dev` / `npm start`. Jobs only run while the API process is up.
+
+| Default | Job |
+|---------|-----|
+| `0 6 * * *` | Search → filter → write pipeline |
+| `0 8 * * *` | Email + WhatsApp digest (score ≥ `DIGEST_MIN_SCORE`, default 60) |
+
+Override in `.env`:
+
+```bash
+CRON_SEARCH=*/5 * * * *   # every 5 min (local testing)
+CRON_DIGEST=0 9 * * *     # 9:00 AM digest
+CRON_TZ=Europe/London     # optional timezone
+DIGEST_MIN_SCORE=40
+```
+
+Test notifications from the **Status** page or:
+
+```bash
+curl -X POST http://localhost:4000/api/send-digest -H 'Content-Type: application/json' -d '{"test":true}'
+curl -X POST http://localhost:4000/api/send-digest -H 'Content-Type: application/json' -d '{"minScore":40}'
+```
 
 ## Project structure
 
