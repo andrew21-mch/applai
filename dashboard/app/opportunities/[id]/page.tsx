@@ -9,6 +9,8 @@ import {
   fetchOpportunity,
   prepareSubmission,
   rejectOpportunity,
+  scanOpportunityForm,
+  type FormFieldScan,
   type OpportunityDetail,
   type SubmissionResult,
 } from '@/lib/api';
@@ -23,6 +25,8 @@ export default function OpportunityDetailPage() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'info' | 'success' | 'error'>('info');
   const [submission, setSubmission] = useState<SubmissionResult | null>(null);
+  const [formFields, setFormFields] = useState<FormFieldScan[] | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -40,6 +44,26 @@ export default function OpportunityDetailPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  async function handleScanForm() {
+    setScanLoading(true);
+    setFormFields(null);
+    try {
+      const result = await scanOpportunityForm(id);
+      setFormFields(result.data.fields);
+      setMessage(
+        result.data.fieldCount > 0
+          ? `Found ${result.data.fieldCount} fields with suggested answers.`
+          : result.data.pageNote ?? 'No form fields found.',
+      );
+      setMessageType('info');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Form scan failed');
+      setMessageType('error');
+    } finally {
+      setScanLoading(false);
+    }
+  }
 
   async function handleApprove() {
     if (!confirm('Approve and preview form fill? Nothing will be submitted yet.')) {
@@ -199,9 +223,41 @@ export default function OpportunityDetailPage() {
             )}
           </section>
         )}
+        {formFields && formFields.length > 0 && (
+          <section className="section">
+            <h2>Form fields & suggested answers</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {formFields.map((field) => (
+                <div key={field.fieldKey} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                  <p style={{ fontWeight: 600 }}>
+                    {field.label || field.name || field.placeholder || field.inputType}
+                    {field.required && ' *'}
+                  </p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                    {field.inputType}
+                    {field.options.length > 0 && ` · options: ${field.options.slice(0, 5).join(', ')}`}
+                  </p>
+                  {field.suggestion ? (
+                    <p style={{ marginTop: '0.5rem' }}>
+                      <strong>Suggested:</strong> {field.suggestion.suggestedAnswer}
+                      <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        ({field.suggestion.confidence} · {field.suggestion.source})
+                      </span>
+                    </p>
+                  ) : (
+                    <p style={{ marginTop: '0.5rem', color: 'var(--muted)', fontSize: '0.9rem' }}>No suggestion</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <div className="actions">
+        <button className="btn btn-secondary" onClick={handleScanForm} disabled={scanLoading || actionLoading}>
+          {scanLoading ? 'Scanning form…' : 'Scan form & suggest answers'}
+        </button>
         {opp.status === 'new' && (
           <>
             <button className="btn btn-success" onClick={handleApprove} disabled={actionLoading}>

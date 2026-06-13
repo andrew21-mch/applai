@@ -31,6 +31,17 @@ export function mergeWithDefaults(partial: Partial<UserProfile>): UserProfile {
 }
 
 export function profileToTextFrom(profile: UserProfile): string {
+  const career = profile.careerAnalysis;
+  const careerBlock = career
+    ? `
+Career Level: ${career.careerLevel} (${career.seniorityLabel})
+Years Experience: ${career.yearsExperience ?? 'unknown'}
+Primary Domain: ${career.primaryDomain}
+Target Roles: ${career.targetRoles.join(', ')}
+Appropriate Levels: ${career.appropriateJobLevels.join(', ')}
+Strengths: ${career.strengths.join(', ')}`
+    : '';
+
   return `
 Name: ${profile.name}
 Email: ${profile.email}
@@ -42,6 +53,6 @@ Experience: ${profile.experience.join(', ') || 'Not specified'}
 Languages: ${profile.languages.join(', ')}
 Job Types Sought: ${profile.jobTypes.join(', ')}
 Scholarship Types Sought: ${profile.scholarshipTypes.join(', ')}
-Salary Expectation: ${profile.salaryExpectation}
+Salary Expectation: ${profile.salaryExpectation}${careerBlock}
 `.trim();
 }

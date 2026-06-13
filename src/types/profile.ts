@@ -1,3 +1,24 @@
+export type CareerLevel =
+  | 'intern'
+  | 'junior'
+  | 'mid'
+  | 'senior'
+  | 'lead'
+  | 'principal'
+  | 'executive';
+
+export interface CareerAnalysis {
+  careerLevel: CareerLevel;
+  yearsExperience: number | null;
+  seniorityLabel: string;
+  primaryDomain: string;
+  targetRoles: string[];
+  appropriateJobLevels: CareerLevel[];
+  strengths: string[];
+  levelReasoning: string;
+  analyzedAt?: string;
+}
+
 export interface UserProfile {
   id?: string;
   name: string;
@@ -15,6 +36,7 @@ export interface UserProfile {
   rawResumeText?: string | null;
   resumeFilename?: string | null;
   resumeStoragePath?: string | null;
+  careerAnalysis?: CareerAnalysis | null;
   updatedAt?: string | null;
 }
 

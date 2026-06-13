@@ -8,6 +8,8 @@ Run these two files in order:
 
 1. **`schema.sql`** — opportunities, applications, submission_logs, RLS
 2. **`profile.sql`** — user profiles and resume metadata
+3. **`career_analysis.sql`** — AI career level column on profiles (optional upgrade)
+4. **`subscriptions.sql`** — job alert email subscriptions (optional upgrade)
 
 Then create Storage buckets (below).
 
@@ -18,6 +20,24 @@ If you already ran an older `schema.sql` without `submission_logs`:
 ```bash
 # Run only this file:
 supabase/submission_logs.sql
+```
+
+If career level / form suggestions are missing after resume upload:
+
+```bash
+supabase/career_analysis.sql
+```
+
+If job subscriptions fail (`job_subscriptions` table missing):
+
+```bash
+supabase/subscriptions.sql
+```
+
+If the same jobs repeat in every digest email:
+
+```bash
+supabase/notification_deliveries.sql
 ```
 
 If inserts fail with RLS error `42501`:
@@ -45,3 +65,4 @@ After running SQL, confirm tables exist under **Table Editor**:
 - `applications`
 - `user_profiles`
 - `submission_logs`
+- `job_subscriptions` (if you ran `subscriptions.sql`)

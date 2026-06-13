@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "ApplAI Form Fill",
+  "version": "1.0.0",
+  "description": "Fill job application forms from your ApplAI profile (local API).",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "http://localhost:4000/*",
+    "http://127.0.0.1:4000/*",
+    "https://*/*",
+    "http://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ApplAI Fill"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,4 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_SECRET = process.env.NEXT_PUBLIC_API_SECRET ?? '';
+
+function apiHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(API_SECRET ? { 'x-api-secret': API_SECRET } : {}),
+    ...extra,
+  };
+}
 
 export interface Opportunity {
   id: string;
@@ -44,10 +53,7 @@ export interface SubmissionResult {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: apiHeaders(options?.headers as Record<string, string>),
   });
 
   const data = await res.json();
@@ -177,7 +183,49 @@ export interface UserProfile {
   salaryExpectation: string;
   rawResumeText?: string | null;
   resumeFilename?: string | null;
+  careerAnalysis?: {
+    careerLevel: string;
+    yearsExperience: number | null;
+    seniorityLabel: string;
+    primaryDomain: string;
+    targetRoles: string[];
+    appropriateJobLevels: string[];
+    strengths: string[];
+    levelReasoning: string;
+    analyzedAt?: string;
+  } | null;
   updatedAt?: string | null;
+}
+
+export interface FormFieldScan {
+  fieldKey: string;
+  tag: string;
+  inputType: string;
+  name: string | null;
+  fieldId: string | null;
+  label: string | null;
+  placeholder: string | null;
+  required: boolean;
+  options: string[];
+  suggestion?: {
+    fieldKey: string;
+    suggestedAnswer: string;
+    confidence: 'high' | 'medium' | 'low';
+    source: 'profile' | 'draft' | 'ai';
+    reason?: string;
+  };
+}
+
+export interface JobSubscription {
+  id: string;
+  email: string;
+  name: string | null;
+  minScore: number;
+  jobTypes: string[];
+  careerLevels: string[];
+  notifyEmail: boolean;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export async function fetchProfile(): Promise<UserProfile> {
@@ -191,6 +239,7 @@ export async function uploadResume(file: File): Promise<{ message: string; data:
 
   const res = await fetch(`${API_URL}/api/profile/resume`, {
     method: 'POST',
+    headers: API_SECRET ? { 'x-api-secret': API_SECRET } : {},
     body: form,
   });
 
@@ -258,5 +307,35 @@ export async function sendDigest(options?: { test?: boolean; minScore?: number }
   return request<{ message: string; count?: number; test?: boolean }>('/api/send-digest', {
     method: 'POST',
     body: JSON.stringify(options ?? {}),
+  });
+}
+
+export async function scanOpportunityForm(id: string) {
+  return request<{
+    data: { url: string; fields: FormFieldScan[]; fieldCount: number; pageNote?: string };
+  }>(`/api/opportunities/${id}/scan-form`, { method: 'POST' });
+}
+
+export async function subscribeToJobs(body: {
+  email: string;
+  name?: string;
+  minScore?: number;
+}) {
+  return request<{ message: string; data: JobSubscription }>('/api/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function unsubscribeFromJobs(email: string) {
+  return request<{ message: string }>(`/api/subscribe?email=${encodeURIComponent(email)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function reanalyzeProfile() {
+  return request<{ message: string; data: UserProfile }>('/api/profile/analyze', {
+    method: 'POST',
   });
 }

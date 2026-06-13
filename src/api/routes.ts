@@ -1,8 +1,10 @@
-import profileRoutes from './profileRoutes';
 import { Router, Request, Response } from 'express';
+import { requireApiSecret } from './authMiddleware';
+import profileRoutes from './profileRoutes';
 import { runSearchPipeline } from '../agents/searchAgent';
 import { runFilterAgent } from '../agents/filterAgent';
 import { runSubmissionAgent } from '../agents/submissionAgent';
+import { sendDailyDigest, sendTestNotification } from '../agents/notificationAgent';
 import {
   getPipelineStatus,
   isPipelineRunning,
@@ -15,14 +17,20 @@ import {
   listOpportunities,
   updateOpportunityStatus,
 } from '../services/supabase';
-import { sendDailyDigest, sendTestNotification } from '../agents/notificationAgent';
 import { listSubmissionLogs } from '../services/submissionLog';
 import { getNotificationChannels } from '../services/notifier';
+import { scanOpportunityForm } from '../services/formScanService';
+import {
+  getSubscription,
+  subscribeToJobs,
+  unsubscribeFromJobs,
+} from '../services/subscriptionService';
 import { logger } from '../utils/logger';
 import type { OpportunityStatus } from '../types';
 
 const router = Router();
 
+router.use(requireApiSecret);
 router.use('/profile', profileRoutes);
 
 function paramId(req: Request): string {
@@ -170,6 +178,78 @@ router.get('/pipeline/stream', (req: Request, res: Response) => {
   req.on('close', () => {
     unsubscribe();
   });
+});
+
+router.post('/opportunities/:id/scan-form', async (req: Request, res: Response) => {
+  try {
+    const result = await scanOpportunityForm(paramId(req));
+    res.json({ data: result });
+  } catch (err) {
+    logger.error('POST /opportunities/:id/scan-form failed', { id: req.params.id, err });
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Form scan failed',
+    });
+  }
+});
+
+router.post('/subscribe', async (req: Request, res: Response) => {
+  try {
+    const email = req.body?.email?.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: 'Valid email is required.' });
+      return;
+    }
+
+    const subscription = await subscribeToJobs({
+      email,
+      name: req.body?.name,
+      minScore: req.body?.minScore !== undefined ? parseInt(String(req.body.minScore), 10) : undefined,
+      jobTypes: req.body?.jobTypes,
+      careerLevels: req.body?.careerLevels,
+    });
+
+    res.json({
+      message: `Subscribed ${email} to job notifications (min score ${subscription.minScore}).`,
+      data: subscription,
+    });
+  } catch (err) {
+    logger.error('POST /subscribe failed', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Subscribe failed' });
+  }
+});
+
+router.delete('/subscribe', async (req: Request, res: Response) => {
+  try {
+    const email = (req.body?.email ?? req.query.email)?.toString().trim();
+    if (!email) {
+      res.status(400).json({ error: 'Email is required.' });
+      return;
+    }
+    await unsubscribeFromJobs(email);
+    res.json({ message: `Unsubscribed ${email}.` });
+  } catch (err) {
+    logger.error('DELETE /subscribe failed', err);
+    res.status(500).json({ error: 'Unsubscribe failed' });
+  }
+});
+
+router.get('/subscribe', async (req: Request, res: Response) => {
+  try {
+    const email = req.query.email?.toString().trim();
+    if (!email) {
+      res.status(400).json({ error: 'Query param email is required.' });
+      return;
+    }
+    const subscription = await getSubscription(email);
+    if (!subscription) {
+      res.status(404).json({ error: 'No subscription found for this email.' });
+      return;
+    }
+    res.json({ data: subscription });
+  } catch (err) {
+    logger.error('GET /subscribe failed', err);
+    res.status(500).json({ error: 'Failed to fetch subscription' });
+  }
 });
 
 router.post('/send-digest', async (req: Request, res: Response) => {

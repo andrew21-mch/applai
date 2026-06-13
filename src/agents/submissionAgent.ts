@@ -2,7 +2,7 @@ import { mkdir } from 'fs/promises';
 import path from 'path';
 import { chromium } from 'playwright';
 import { logger } from '../utils/logger';
-import { fillApplicationForm, clickSubmitButton, navigateToApplicationForm } from '../utils/formFill';
+import { fillApplicationFormSmart, clickSubmitButton, navigateToApplicationForm } from '../utils/formFill';
 import {
   getOpportunityById,
   markApplicationSubmitted,
@@ -100,13 +100,12 @@ export async function runSubmissionAgent(
       logger.warn('No resume file in storage — upload CV at /profile');
     }
 
-    const { filled, missed, pageNote } = await fillApplicationForm(page, {
-      name: profile.name,
-      email: profile.email,
+    const { filled, missed, pageNote } = await fillApplicationFormSmart(
+      page,
+      profile,
       coverLetter,
-      phone: profile.phone,
-      resumePath: resumeFile?.path,
-    });
+      resumeFile?.path,
+    );
 
     logger.info('Form fill result', { filled, missed, pageNote });
 

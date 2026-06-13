@@ -3,6 +3,7 @@ import multer from 'multer';
 import {
   extractTextFromFile,
   getActiveProfile,
+  reanalyzeActiveProfile,
   saveProfileFromResume,
 } from '../services/profileService';
 import { logger } from '../utils/logger';
@@ -58,13 +59,28 @@ router.post('/resume', upload.single('resume'), async (req: Request, res: Respon
     );
 
     res.json({
-      message: `Resume parsed — ${profile.skills.length} skills extracted`,
+      message: `Resume parsed — ${profile.skills.length} skills extracted${profile.careerAnalysis ? ` · level: ${profile.careerAnalysis.careerLevel}` : ''}`,
       data: profile,
     });
   } catch (err) {
     logger.error('POST /profile/resume failed', err);
     res.status(500).json({
       error: err instanceof Error ? err.message : 'Failed to process resume',
+    });
+  }
+});
+
+router.post('/analyze', async (_req: Request, res: Response) => {
+  try {
+    const profile = await reanalyzeActiveProfile();
+    res.json({
+      message: `Career level: ${profile.careerAnalysis?.seniorityLabel ?? profile.role}`,
+      data: profile,
+    });
+  } catch (err) {
+    logger.error('POST /profile/analyze failed', err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Career analysis failed',
     });
   }
 });

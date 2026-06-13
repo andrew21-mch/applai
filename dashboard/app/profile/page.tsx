@@ -2,12 +2,62 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { fetchProfile, uploadResume, type UserProfile } from '@/lib/api';
+import { fetchProfile, reanalyzeProfile, subscribeToJobs, uploadResume, type UserProfile } from '@/lib/api';
+
+function SubscribeForm({ defaultEmail }: { defaultEmail: string }) {
+  const [email, setEmail] = useState(defaultEmail);
+  const [minScore, setMinScore] = useState(60);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function handleSubscribe(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg('');
+    try {
+      const result = await subscribeToJobs({ email, minScore });
+      setMsg(result.message);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Subscribe failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubscribe} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: 360 }}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+        style={{ padding: '0.5rem' }}
+      />
+      <label style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+        Min match score:{' '}
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={minScore}
+          onChange={(e) => setMinScore(parseInt(e.target.value, 10) || 60)}
+          style={{ width: 60, marginLeft: '0.25rem' }}
+        />
+      </label>
+      <button type="submit" className="btn btn-primary" disabled={busy} style={{ alignSelf: 'flex-start' }}>
+        {busy ? 'Subscribing…' : 'Subscribe to job alerts'}
+      </button>
+      {msg && <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{msg}</p>}
+    </form>
+  );
+}
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'info' | 'success' | 'error'>('info');
 
@@ -20,6 +70,22 @@ export default function ProfilePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setMessage('');
+    try {
+      const result = await reanalyzeProfile();
+      setProfile(result.data);
+      setMessage(result.message);
+      setMessageType('success');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Analysis failed');
+      setMessageType('error');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -92,6 +158,55 @@ export default function ProfilePage() {
                 {profile.updatedAt && ` · updated ${new Date(profile.updatedAt).toLocaleString()}`}
               </p>
             )}
+          </section>
+
+          <section className="section">
+            <h2>Career level</h2>
+            {profile.careerAnalysis ? (
+              <>
+                <p><strong>{profile.careerAnalysis.seniorityLabel}</strong></p>
+                <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+                  Level: {profile.careerAnalysis.careerLevel}
+                  {profile.careerAnalysis.yearsExperience != null &&
+                    ` · ~${profile.careerAnalysis.yearsExperience} years`}
+                </p>
+                <p style={{ marginTop: '0.5rem' }}>{profile.careerAnalysis.levelReasoning}</p>
+                {profile.careerAnalysis.targetRoles.length > 0 && (
+                  <p style={{ marginTop: '0.75rem' }}>
+                    <strong>Target roles:</strong> {profile.careerAnalysis.targetRoles.join(', ')}
+                  </p>
+                )}
+                <button
+                  className="btn btn-secondary"
+                  style={{ marginTop: '0.75rem' }}
+                  onClick={handleAnalyze}
+                  disabled={analyzing}
+                >
+                  {analyzing ? 'Analyzing…' : 'Re-analyze'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={{ color: 'var(--muted)', marginBottom: '0.75rem' }}>
+                  AI reads your resume and sets level (junior → senior), years of experience, and target roles for search.
+                </p>
+                {profile.rawResumeText ? (
+                  <button className="btn btn-primary" onClick={handleAnalyze} disabled={analyzing}>
+                    {analyzing ? 'Analyzing…' : 'Analyze career level'}
+                  </button>
+                ) : (
+                  <p style={{ color: 'var(--muted)' }}>Upload a resume first.</p>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="section">
+            <h2>Job alerts</h2>
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+              Subscribe to email when new jobs match your profile (uses the same digest schedule).
+            </p>
+            <SubscribeForm defaultEmail={profile.email} />
           </section>
 
           <section className="section">

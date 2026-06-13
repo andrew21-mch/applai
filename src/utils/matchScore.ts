@@ -1,5 +1,6 @@
 import type { Opportunity } from '../types';
 import type { UserProfile } from '../types/profile';
+import { isSeniorityMismatch } from '../agents/profileAnalysisAgent';
 
 function normalize(text: string): string {
   return text.toLowerCase();
@@ -65,6 +66,10 @@ export function computeRuleBasedScore(profile: UserProfile, opp: Opportunity): n
     const edu = profile.education.toLowerCase();
     if (edu.includes('master') && /master|postgraduate|graduate/i.test(text)) score += 15;
     if (edu.includes('computer') && /computer|tech|stem|engineering/i.test(text)) score += 10;
+  }
+
+  if (isSeniorityMismatch(opp.title, profile.careerAnalysis)) {
+    score = Math.max(0, score - 35);
   }
 
   return Math.min(100, Math.max(0, score));

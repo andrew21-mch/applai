@@ -5,8 +5,9 @@ import { mergeWithDefaults, profileDefaults, profileToTextFrom } from '../config
 import { complete, completeJson } from './ollama';
 import { getSupabase } from './supabase';
 import { logger } from '../utils/logger';
+import { analyzeCareerLevel } from '../agents/profileAnalysisAgent';
 import { splitList } from '../utils/jsonParse';
-import type { ParsedResumeFields, UserProfile } from '../types/profile';
+import type { CareerAnalysis, ParsedResumeFields, UserProfile } from '../types/profile';
 
 const RESUMES_BUCKET = 'resumes';
 
@@ -27,6 +28,7 @@ interface ProfileRow {
   raw_resume_text: string | null;
   resume_filename: string | null;
   resume_storage_path: string | null;
+  career_analysis: CareerAnalysis | null;
   updated_at: string;
 }
 
@@ -60,6 +62,7 @@ function rowToProfile(row: ProfileRow): UserProfile {
     rawResumeText: row.raw_resume_text,
     resumeFilename: row.resume_filename,
     resumeStoragePath: row.resume_storage_path,
+    careerAnalysis: row.career_analysis ?? null,
     updatedAt: row.updated_at,
   });
 }
@@ -236,11 +239,55 @@ export async function saveProfileFromResume(
     .single();
 
   if (error) throw error;
+
+  let profile = rowToProfile(data as ProfileRow);
+
+  try {
+    const careerAnalysis = await analyzeCareerLevel(profile);
+    const { data: updated, error: updateError } = await client
+      .from('user_profiles')
+      .update({ career_analysis: careerAnalysis, updated_at: new Date().toISOString() })
+      .eq('id', profile.id)
+      .select()
+      .single();
+
+    if (!updateError && updated) {
+      profile = rowToProfile(updated as ProfileRow);
+    }
+  } catch (err) {
+    logger.warn('Career analysis after resume upload failed', err);
+  }
+
   logger.info('Profile updated from resume', {
-    name: data.name,
-    skillCount: (data.skills as string[]).length,
+    name: profile.name,
+    skillCount: profile.skills.length,
+    careerLevel: profile.careerAnalysis?.careerLevel,
   });
 
+  return profile;
+}
+
+export async function reanalyzeActiveProfile(): Promise<UserProfile> {
+  const profile = await getActiveProfile();
+  if (!profile.rawResumeText?.trim()) {
+    throw new Error('Upload a resume before running career analysis.');
+  }
+
+  const careerAnalysis = await analyzeCareerLevel(profile);
+  const client = getSupabase();
+
+  if (!profile.id) {
+    return { ...profile, careerAnalysis };
+  }
+
+  const { data, error } = await client
+    .from('user_profiles')
+    .update({ career_analysis: careerAnalysis, updated_at: new Date().toISOString() })
+    .eq('id', profile.id)
+    .select()
+    .single();
+
+  if (error) throw error;
   return rowToProfile(data as ProfileRow);
 }
 

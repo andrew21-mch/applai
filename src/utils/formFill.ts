@@ -1,4 +1,7 @@
 import type { Frame, Page } from 'playwright';
+import { scanFormFields, type ScannedFormField } from './formScan';
+import { suggestFormFieldAnswers } from '../agents/formSuggestionAgent';
+import type { UserProfile } from '../types/profile';
 import { isApplicationUrl } from './applicationUrls';
 
 type FillContext = Page | Frame;
@@ -437,6 +440,133 @@ export async function fillApplicationForm(
   } else if (missed.includes('coverLetter') && fields.coverLetter.trim()) {
     pageNote =
       'Cover letter field not found — some ATS sites use custom editors or optional questions with different labels. Check the screenshot.';
+  }
+
+  return { filled, missed, pageNote };
+}
+
+function fieldLabel(field: ScannedFormField): string {
+  return field.label || field.name || field.placeholder || field.inputType;
+}
+
+async function tryFillScannedField(
+  page: Page,
+  field: ScannedFormField,
+  value: string,
+): Promise<boolean> {
+  if (!value.trim() || field.inputType === 'file') return false;
+  if (/^upload resume/i.test(value)) return false;
+
+  for (const ctx of contexts(page)) {
+    if (field.fieldId) {
+      try {
+        const loc = ctx.locator(`#${field.fieldId}`).first();
+        if (await tryFillField(loc, value)) return true;
+      } catch {
+        /* continue */
+      }
+    }
+    if (field.name) {
+      try {
+        const loc = ctx.locator(`[name="${field.name}"]`).first();
+        if (await tryFillField(loc, value)) return true;
+      } catch {
+        /* continue */
+      }
+    }
+    if (field.label) {
+      const escaped = field.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 80);
+      if (await tryFillByLabel(ctx, [new RegExp(escaped, 'i')], value)) return true;
+    }
+    if (field.placeholder) {
+      try {
+        const loc = ctx.locator(`[placeholder="${field.placeholder}"]`).first();
+        if (await tryFillField(loc, value)) return true;
+      } catch {
+        /* continue */
+      }
+    }
+  }
+  return false;
+}
+
+async function fillFromAiSuggestions(
+  page: Page,
+  profile: UserProfile,
+  coverLetter: string,
+  alreadyFilled: Set<string>,
+): Promise<{ filled: string[]; missed: string[] }> {
+  const filled: string[] = [];
+  const missed: string[] = [];
+
+  const scanned = await scanFormFields(page);
+  const suggestions = await suggestFormFieldAnswers(scanned, profile, coverLetter);
+  const byKey = new Map(suggestions.map((s) => [s.fieldKey, s]));
+
+  for (const field of scanned) {
+    const label = fieldLabel(field);
+    const norm = label.toLowerCase();
+    if (alreadyFilled.has(norm)) continue;
+
+    const suggestion = byKey.get(field.fieldKey);
+    if (!suggestion?.suggestedAnswer?.trim()) {
+      if (field.required) missed.push(label);
+      continue;
+    }
+
+    const ok = await tryFillScannedField(page, field, suggestion.suggestedAnswer);
+    const key = `${label} (${suggestion.source})`;
+    if (ok) {
+      filled.push(key);
+      alreadyFilled.add(norm);
+    } else if (field.required) {
+      missed.push(label);
+    }
+  }
+
+  return { filled, missed };
+}
+
+/** Heuristic fill + AI suggestions for remaining fields */
+export async function fillApplicationFormSmart(
+  page: Page,
+  profile: UserProfile,
+  coverLetter: string,
+  resumePath?: string,
+): Promise<{ filled: string[]; missed: string[]; pageNote?: string }> {
+  const base = await fillApplicationForm(page, {
+    name: profile.name,
+    email: profile.email,
+    coverLetter,
+    phone: profile.phone,
+    resumePath,
+  });
+
+  const alreadyFilled = new Set<string>([
+    'name',
+    'email',
+    'phone',
+    'coverletter',
+    'cover letter',
+    'resume',
+  ]);
+
+  const ai = await fillFromAiSuggestions(page, profile, coverLetter, alreadyFilled);
+
+  const filled = [...base.filled, ...ai.filled];
+  const missedSet = new Set(base.missed);
+  for (const m of ai.missed) {
+    if (!filled.some((f) => f.toLowerCase().includes(m.toLowerCase()))) {
+      missedSet.add(m);
+    }
+  }
+  const missed = [...missedSet].filter(
+    (m) => !filled.some((f) => f.toLowerCase().startsWith(m.toLowerCase())),
+  );
+
+  let pageNote = base.pageNote;
+  if (ai.filled.length > 0) {
+    pageNote = `${pageNote ? `${pageNote} ` : ''}AI filled ${ai.filled.length} additional field(s).`.trim();
   }
 
   return { filled, missed, pageNote };

@@ -1,4 +1,5 @@
 import type { UserProfile } from '../types/profile';
+import { careerLevelToSearchPrefix } from '../agents/profileAnalysisAgent';
 import { ATS_SEARCH_SITES } from '../utils/applicationUrls';
 
 export interface SearchQuery {
@@ -34,14 +35,22 @@ export function buildSearchQueriesFromProfile(profile: UserProfile): SearchQuery
 
   if (profile.role?.trim()) roles.add(profile.role.trim());
   for (const title of rolesFromExperience(profile.experience)) roles.add(title);
+  for (const title of profile.careerAnalysis?.targetRoles ?? []) {
+    if (title.trim()) roles.add(title.trim());
+  }
+
+  const levelPrefix = profile.careerAnalysis?.careerLevel
+    ? careerLevelToSearchPrefix(profile.careerAnalysis.careerLevel)
+    : '';
 
   const queries: SearchQuery[] = [];
 
   for (const role of roles) {
+    const levelPart = levelPrefix ? `${levelPrefix} ` : '';
     queries.push({
       query: skillPhrase
-        ? `remote ${role} ${skillPhrase} jobs ${YEAR} ${ATS_SEARCH_SITES}`
-        : `remote ${role} jobs ${YEAR} ${ATS_SEARCH_SITES}`,
+        ? `remote ${levelPart}${role} ${skillPhrase} jobs ${YEAR} ${ATS_SEARCH_SITES}`
+        : `remote ${levelPart}${role} jobs ${YEAR} ${ATS_SEARCH_SITES}`,
       type: 'job',
     });
   }
@@ -69,7 +78,8 @@ export function buildSearchQueriesFromProfile(profile: UserProfile): SearchQuery
 
 export function getSearchQueries(profile: UserProfile): SearchQuery[] {
   if (!profile.rawResumeText) return [];
-  return buildSearchQueriesFromProfile(profile);
+  const max = parseInt(process.env.MAX_SEARCH_QUERIES ?? '8', 10);
+  return buildSearchQueriesFromProfile(profile).slice(0, Math.max(1, max));
 }
 
 export const jobBoardDomains = [

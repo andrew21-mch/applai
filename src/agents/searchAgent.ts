@@ -17,7 +17,22 @@ import { runFilterAgent } from './filterAgent';
 import { runWriterAgent } from './writerAgent';
 import { logger } from '../utils/logger';
 import { isSavableJobUrl } from '../utils/applicationUrls';
+import { notifyOnNewMatches } from './notificationAgent';
 import type { ExtractedOpportunity, OpportunityType } from '../types';
+
+function urlDedupeKey(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/$/, '')}`.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+export interface SearchAgentResult {
+  newCount: number;
+  newIds: string[];
+}
 
 interface TavilyResult {
   title?: string;
@@ -114,12 +129,17 @@ async function extractOpportunity(
   }
 }
 
-export async function runSearchAgent(): Promise<number> {
+export async function runSearchAgent(): Promise<SearchAgentResult> {
   logger.info('Search agent started');
   pipelineLog('search', 'Search agent started — querying job boards & scholarship sites');
 
   const existingUrls = await getExistingUrls();
+  const seenKeys = new Set<string>();
+  for (const url of existingUrls) {
+    seenKeys.add(urlDedupeKey(url));
+  }
   let newCount = 0;
+  const newIds: string[] = [];
 
   const profile = await getActiveProfile();
   const searchQueries = getSearchQueries(profile);
@@ -133,7 +153,7 @@ export async function runSearchAgent(): Promise<number> {
     updateSummary({ found: 0 });
     pipelineLog('search', 'Search skipped — no resume profile', 'warn');
     logger.warn('Search skipped — no resume uploaded');
-    return 0;
+    return { newCount: 0, newIds: [] };
   }
 
   pipelineLog(
@@ -151,8 +171,10 @@ export async function runSearchAgent(): Promise<number> {
 
       for (const result of results) {
         const url = result.url ?? '';
-        if (!url || existingUrls.has(url)) {
-          if (url && existingUrls.has(url)) {
+        const dedupeKey = url ? urlDedupeKey(url) : '';
+
+        if (!url || existingUrls.has(url) || (dedupeKey && seenKeys.has(dedupeKey))) {
+          if (url && (existingUrls.has(url) || seenKeys.has(dedupeKey))) {
             pipelineLog('search', `Skipped duplicate: ${result.title ?? url}`, 'warn');
           }
           continue;
@@ -174,7 +196,9 @@ export async function runSearchAgent(): Promise<number> {
         const saved = await insertOpportunity(opportunity);
         if (saved) {
           existingUrls.add(url);
+          seenKeys.add(urlDedupeKey(saved.url));
           newCount++;
+          newIds.push(saved.id);
           pipelineLog('search', `Saved: ${saved.title}`, 'success', {
             organization: saved.organization,
             type: saved.type,
@@ -192,7 +216,7 @@ export async function runSearchAgent(): Promise<number> {
   updateSummary({ found: newCount });
   pipelineLog('search', `Search complete — ${newCount} new opportunities`, 'success');
   logger.info('Search agent completed', { newCount });
-  return newCount;
+  return { newCount, newIds };
 }
 
 export async function runSearchPipeline(): Promise<void> {
@@ -203,7 +227,7 @@ export async function runSearchPipeline(): Promise<void> {
   startPipeline();
 
   try {
-    const newCount = await runSearchAgent();
+    const { newCount, newIds } = await runSearchAgent();
 
     setPhase('filter');
     const shortlisted = await runFilterAgent();
@@ -213,6 +237,9 @@ export async function runSearchPipeline(): Promise<void> {
 
     updateSummary({ shortlisted, draftsWritten });
     completePipeline();
+
+    await notifyOnNewMatches(newIds);
+
     logger.info('Search pipeline completed', { newCount, shortlisted, draftsWritten });
   } catch (err) {
     failPipeline(err);

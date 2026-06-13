@@ -1,0 +1,39 @@
+# Dev stack — live code mounts (rebuild not required for UI/API changes)
+# Usage: docker compose -f docker-compose.dev.yml up
+
+services:
+  api:
+    image: mcr.microsoft.com/playwright:v1.50.1-noble
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    ports:
+      - '4000:4000'
+    env_file:
+      - .env
+    environment:
+      PORT: 4000
+      DASHBOARD_URL: http://localhost:4001
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./screenshots:/app/screenshots
+      - ./.tmp:/app/.tmp
+
+  dashboard:
+    image: node:22-bookworm
+    working_dir: /app/dashboard
+    command: sh -c "npm ci && npm run dev"
+    ports:
+      - '4001:4001'
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_API_SECRET: ${API_SECRET:-}
+    volumes:
+      - ./dashboard:/app/dashboard
+      - /app/dashboard/node_modules
+      - /app/dashboard/.next
+    depends_on:
+      - api

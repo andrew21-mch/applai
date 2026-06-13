@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: system-ui, sans-serif; width: 280px; padding: 12px; margin: 0; }
+    label { display: block; font-size: 12px; color: #555; margin-top: 8px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px; margin-top: 4px; }
+    button { margin-top: 12px; width: 100%; padding: 8px; cursor: pointer; }
+    #status { font-size: 12px; color: #666; margin-top: 8px; min-height: 2em; }
+  </style>
+</head>
+<body>
+  <h3 style="margin: 0 0 8px;">ApplAI</h3>
+  <p style="font-size: 12px; color: #666; margin: 0;">Fill the current tab from your profile.</p>
+  <label>API URL</label>
+  <input id="apiUrl" type="url" value="http://localhost:4000" />
+  <label>API secret (optional)</label>
+  <input id="apiSecret" type="password" placeholder="Same as API_SECRET in .env" />
+  <button id="save">Save settings</button>
+  <button id="fill">Fill this page</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

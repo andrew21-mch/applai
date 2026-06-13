@@ -4,7 +4,38 @@ Gradual issue list for the project. Copy items into [GitHub Issues](https://gith
 
 **Priority:** P0 = do first · P1 = high value · P2 = medium · P3 = later / nice-to-have
 
-**Status:** `open` · `in-progress` · `done` (update this file or close the GitHub issue when finished)
+---
+
+## Epic — Profile intelligence, form assist & subscriptions (in progress)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| AI career level from resume | **Done (Phase 1)** | Runs on upload; `career_analysis` JSON on profile |
+| Profile-based search queries | **Done** | Uses target roles + level prefix in Tavily queries |
+| Seniority-aware match scoring | **Done** | Penalizes intern/senior mismatches |
+| Form field scan + AI suggestions | **Done (Phase 1)** | `POST /api/opportunities/:id/scan-form` + dashboard button |
+| Job email subscriptions | **Done (Phase 1)** | `POST /api/subscribe`; digest sends to subscribers |
+| Auto-fill from suggestions | **Backlog #26** | Preview shows suggestions; Playwright fill not wired yet |
+| Per-subscriber profile crawl | **Backlog #27** | Today: one global profile; subs get filtered digest |
+| Multi-user auth + own profile | **Backlog #21** | Required for true SaaS subscriptions |
+
+### #26 Auto-fill application forms from AI suggestions
+- **Labels:** `auto-apply`, `ai`
+- **Status:** open
+- **Description:** Scan suggests answers but approve flow still uses hardcoded heuristics in `formFill.ts`.
+- **Acceptance criteria:**
+  - [ ] Use suggestions from scan when filling during approve/preview
+  - [ ] User can edit suggestions in dashboard before confirm submit
+  - [ ] Log which fields used AI vs profile
+
+### #27 Per-subscriber profile & crawl
+- **Labels:** `search`, `subscriptions`, `multi-user`
+- **Status:** open
+- **Description:** Subscribers get digest filtered by min score only; crawl uses single active profile.
+- **Acceptance criteria:**
+  - [ ] Link subscription to uploaded profile or invite flow
+  - [ ] Search pipeline keyed to profile id
+  - [ ] Digest deduped per subscriber preferences + career level
 
 ---
 

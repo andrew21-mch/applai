@@ -8,11 +8,21 @@ const DASHBOARD_URL = process.env.DASHBOARD_URL ?? 'http://localhost:4001';
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
 function getTransporter() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const user = process.env.SMTP_USER ?? process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS ?? process.env.EMAIL_PASS;
 
   if (!user || !pass) {
     return null;
+  }
+
+  const host = process.env.SMTP_HOST?.trim();
+  if (host) {
+    return nodemailer.createTransport({
+      host,
+      port: parseInt(process.env.SMTP_PORT ?? '587', 10),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user, pass },
+    });
   }
 
   return nodemailer.createTransport({
@@ -22,7 +32,10 @@ function getTransporter() {
 }
 
 export function isEmailConfigured(): boolean {
-  return !!(process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.NOTIFICATION_EMAIL);
+  const user = process.env.SMTP_USER ?? process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS ?? process.env.EMAIL_PASS;
+  const to = process.env.NOTIFICATION_EMAIL;
+  return !!(user && pass && to);
 }
 
 export function getNotificationChannels(): { email: boolean; whatsapp: boolean } {
@@ -43,9 +56,12 @@ export async function verifyEmailTransport(): Promise<{ ok: boolean; message: st
       return { ok: false, message: 'Email transporter unavailable' };
     }
     await transporter.verify();
+    const smtpHost = process.env.SMTP_HOST?.trim();
     return {
       ok: true,
-      message: `Gmail reachable (${process.env.NOTIFICATION_EMAIL})`,
+      message: smtpHost
+        ? `SMTP reachable (${process.env.NOTIFICATION_EMAIL})`
+        : `Gmail reachable (${process.env.NOTIFICATION_EMAIL})`,
     };
   } catch (err) {
     return {
@@ -86,6 +102,7 @@ function formatOpportunityEntry(
 export async function sendDigest(
   opportunities: Opportunity[],
   applications: Map<string, Application>,
+  options?: { to?: string; greeting?: string },
 ): Promise<void> {
   if (opportunities.length === 0) {
     logger.info('No shortlisted opportunities to send in digest');
@@ -93,14 +110,15 @@ export async function sendDigest(
   }
 
   const tasks: Promise<void>[] = [];
+  const recipient = options?.to ?? process.env.NOTIFICATION_EMAIL;
 
-  if (isEmailConfigured()) {
-    tasks.push(sendEmailDigest(opportunities, applications));
-  } else {
+  if (isEmailConfigured() && recipient) {
+    tasks.push(sendEmailDigest(opportunities, applications, recipient, options?.greeting));
+  } else if (!options?.to) {
     logger.info('Email not configured, skipping email digest');
   }
 
-  if (isWhatsAppConfigured()) {
+  if (!options?.to && isWhatsAppConfigured()) {
     tasks.push(sendWhatsAppDigest(opportunities, applications));
   }
 
@@ -116,15 +134,15 @@ export async function sendDigest(
 async function sendEmailDigest(
   opportunities: Opportunity[],
   applications: Map<string, Application>,
+  to: string,
+  greeting?: string,
 ): Promise<void> {
-  const to = process.env.NOTIFICATION_EMAIL!;
-
   try {
     const transporter = getTransporter();
     if (!transporter) return;
 
     const body = [
-      `Good morning! Here are ${opportunities.length} shortlisted opportunities for your review.`,
+      greeting ?? `Good morning! Here are ${opportunities.length} shortlisted opportunities for your review.`,
       '',
       ...opportunities.map((opp) =>
         formatOpportunityEntry(opp, applications.get(opp.id)),
@@ -137,7 +155,7 @@ async function sendEmailDigest(
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to,
-      subject: `[ApplAI] Daily Digest: ${opportunities.length} new opportunities`,
+      subject: `[ApplAI] Job matches: ${opportunities.length} opportunities`,
       text: body,
     });
 

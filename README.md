@@ -19,7 +19,10 @@ An open-source AI agent that searches for jobs and scholarships, scores them aga
 - **Health dashboard** — check Ollama, Supabase, Tavily, and Playwright at `/status`
 - **Docker Compose** — one-command API + dashboard setup
 - **Notifications** — optional email digest and Twilio WhatsApp alerts
-- **Scheduled pipeline** — daily search at 6:00 AM, digest at 8:00 AM
+- **AI form fill** — heuristics + Ollama field suggestions on approve/preview
+- **Chrome extension** — fill forms in your logged-in browser ([extension/README.md](extension/README.md))
+- **Career level analysis** — resume → junior/senior + target roles for search
+- **Job subscriptions** — email alerts with deduplicated digests
 
 ## Screenshots
 
@@ -115,7 +118,16 @@ docker compose up --build
 
 Ollama must run on the host (`ollama serve`). The API container uses `host.docker.internal:11434`.
 
-## API keys setup
+**Dev with live reload** (code changes without rebuild):
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+### Chrome extension
+
+Load `extension/` in `chrome://extensions` (Developer mode → Load unpacked). See [extension/README.md](extension/README.md).
+
 
 ### Ollama
 
@@ -195,6 +207,10 @@ Dashboard: `NEXT_PUBLIC_API_URL=http://localhost:4000` in `dashboard/.env.local`
 | `POST` | `/api/run-search` | Run search pipeline |
 | `POST` | `/api/send-digest` | Send digest now (`{ "minScore": 40 }` optional) |
 | `POST` | `/api/send-digest` `{ "test": true }` | Send test notification |
+| `POST` | `/api/opportunities/:id/scan-form` | Scan form fields + AI suggested answers |
+| `POST` | `/api/subscribe` | Subscribe email to job alerts |
+| `DELETE` | `/api/subscribe` | Unsubscribe by email |
+| `POST` | `/api/profile/analyze` | Re-run career level analysis |
 | `GET` | `/api/pipeline/status` | Pipeline state |
 | `GET` | `/api/pipeline/stream` | Live pipeline logs (SSE) |
 
